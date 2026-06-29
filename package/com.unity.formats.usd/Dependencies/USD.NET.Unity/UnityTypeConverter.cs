@@ -311,6 +311,12 @@ namespace USD.NET.Unity
         static public string GetUniqueName(Transform transform)
         {
             var uniqueName = transform.name;
+            // USD name can't start with a digit, else the 1st char will be replaced with '_'
+            // nodes with single digit name will all be renamed to '_', overwriting each other
+            if (Char.IsDigit(uniqueName[0]))
+            {
+                uniqueName = $"node{uniqueName}";
+            }
             while (HasAnySiblingsWithName(transform, uniqueName))
             {
                 uniqueName = $"{uniqueName}_{transform.GetSiblingIndex()}";

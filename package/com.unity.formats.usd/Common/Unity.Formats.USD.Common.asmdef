@@ -2,7 +2,8 @@
     "name": "Unity.Formats.USD.Common",
     "references": [
         "USD.NET",
-        "USD.NET.Unity"
+        "USD.NET.Unity",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [
         "Editor",

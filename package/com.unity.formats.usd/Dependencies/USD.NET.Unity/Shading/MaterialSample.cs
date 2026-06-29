@@ -22,6 +22,27 @@ namespace USD.NET.Unity
     [UsdSchema("Material")]
     public class MaterialSample : SampleBase
     {
+        public enum MaterialType
+        {
+            CUSTOM,
+            UNLIT,
+            SIMPLE,
+            PHYSICALLY_BASED,
+            VIDEO,
+            FONT,
+        }
+
+        public enum BlendingMode
+        {
+            BLEND_OPAQUE,
+            BLEND_TRANSPARENT,
+            BLEND_ADD,
+            BLEND_MASKED,
+            BLEND_FADE,
+            BLEND_MULTIPLY,
+            BLEND_PREMULTIPLY,
+        }
+
         public MaterialSample() : base()
         {
         }
@@ -43,9 +64,22 @@ namespace USD.NET.Unity
         [UsdNamespace("outputs")]
         public Connectable<TfToken> displacement = new Connectable<TfToken>();
 
+        [CustomData] public string blendingMode = "BLEND_OPAQUE";
+        [CustomData] public string materialType = "PHYSICALLY_BASED";
+
         // A material instance may require specific keywords to be enabled with respect to the shader
         // configuration. This attribute enables the material writer to include required keywords.
         public string[] requiredKeywords;
+
+        public void SetMaterialType(MaterialType type)
+        {
+            materialType = type.ToString();
+        }
+
+        public void SetBlendingMode(BlendingMode mode)
+        {
+            blendingMode = mode.ToString();
+        }
 
         // ------------------------------------------------------------------------------------------ //
         // Helper functions.

@@ -89,7 +89,7 @@ namespace Unity.Formats.USD
 
         void InstantiateMaterials()
         {
-            var pipeline = UnityEngine.Rendering.GraphicsSettings.renderPipelineAsset;
+            var pipeline = UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline;
             if (!pipeline)
             {
                 // Fallback to the built-in render pipeline, assume Standard PBS shader.

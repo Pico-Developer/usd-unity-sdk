@@ -13,10 +13,13 @@
 // limitations under the License.
 
 using System.Collections.Generic;
-using System.IO;
+using pxr;
+using UnityEditorInternal;
 using UnityEngine;
 using USD.NET;
 using USD.NET.Unity;
+using UnityEngine.Rendering;
+using UnityEngine.UI;
 
 namespace Unity.Formats.USD
 {
@@ -235,7 +238,7 @@ namespace Unity.Formats.USD
             UnityEngine.Profiling.Profiler.EndSample();
         }
 
-        static void ExportMesh(ObjectContext objContext,
+        static public void ExportMesh(ObjectContext objContext,
             ExportContext exportContext,
             Mesh mesh,
             Material sharedMaterial,
@@ -274,6 +277,9 @@ namespace Unity.Formats.USD
             {
                 mesh.RecalculateBounds();
             }
+
+            //  Apply mesh subidivision type uniform
+
 
             sample.extent = mesh.bounds;
 

@@ -162,7 +162,7 @@ namespace Unity.Formats.USD
                 mat.SetVector(kvp.Key, kvp.Value);
             }
 
-            var pipeline = UnityEngine.Rendering.GraphicsSettings.renderPipelineAsset;
+            var pipeline = UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline;
             if (!pipeline)
             {
                 var matAdapter = new StandardShaderImporter(mat);

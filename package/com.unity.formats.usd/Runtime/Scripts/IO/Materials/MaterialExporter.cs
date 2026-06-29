@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using USD.NET;
@@ -48,6 +49,11 @@ namespace Unity.Formats.USD
             ExportRegistry.Add("Standard (Specular setup)",
                 StandardShaderExporter.ExportStandardSpecular);
 
+            ExportRegistry.Add("Unlit/Texture", StandardShaderExporter.ExportStandardCommon);
+            ExportRegistry.Add("Unlit/Color", StandardShaderExporter.ExportStandardCommon);
+            ExportRegistry.Add("Unlit/Transparent", StandardShaderExporter.ExportStandardCommon);
+            ExportRegistry.Add("Unlit/Transparent Cutout", StandardShaderExporter.ExportStandardCommon);
+
             ExportRegistry.Add("HDRenderPipeline/Lit",
                 HdrpShaderExporter.ExportLit);
             ExportRegistry.Add("HDRenderPipeline/LitTessellation",
@@ -66,8 +72,82 @@ namespace Unity.Formats.USD
             ExportRegistry.Add("HDRP/LayeredLitTessellation",
                 HdrpShaderExporter.ExportLit);
 
+            ExportRegistry.Add("Universal Render Pipeline/Lit",
+                UrpShaderExporter.ExportLit);
+            ExportRegistry.Add("Universal Render Pipeline/Unlit",
+                UrpShaderExporter.ExportUnlit);
+            ExportRegistry.Add("Universal Render Pipeline/Particles Unlit",
+                UrpShaderExporter.ExportUnlit);
+
             ExportRegistry.Add(kStandardFallbackHandler,
                 StandardShaderExporter.ExportGeneric);
+        }
+
+        private static MaterialSample.BlendingMode GetRenderingMode(Material mat)
+        {
+            if (mat.HasProperty("_Mode"))
+            {
+                int mode = mat.GetInt("_Mode");
+
+                switch (mode)
+                {
+                    case 0:
+                        return MaterialSample.BlendingMode.BLEND_OPAQUE;
+                    case 1: // alpha cutoff
+                        return MaterialSample.BlendingMode.BLEND_TRANSPARENT;
+                    case 2:
+                        return MaterialSample.BlendingMode.BLEND_FADE;
+                    case 3: // alpha blend
+                        return MaterialSample.BlendingMode.BLEND_TRANSPARENT;
+                    default:
+                        return MaterialSample.BlendingMode.BLEND_OPAQUE;
+                }
+            }
+            else if (mat.HasProperty("_Surface"))
+            {
+                int mode = mat.GetInt("_Surface");
+
+                switch (mode)
+                {
+                    case 0:
+                        return MaterialSample.BlendingMode.BLEND_OPAQUE;
+                    case 1:
+                        return MaterialSample.BlendingMode.BLEND_TRANSPARENT;
+                    default:
+                        return MaterialSample.BlendingMode.BLEND_OPAQUE;
+                }
+            }
+            else if (mat.shader.name.IndexOf("Transparent", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return MaterialSample.BlendingMode.BLEND_TRANSPARENT;
+            }
+            else if (mat.shader.name.IndexOf("Additive", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return MaterialSample.BlendingMode.BLEND_ADD;
+            }
+            else if (mat.shader.name.IndexOf("Premultiply", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return MaterialSample.BlendingMode.BLEND_PREMULTIPLY;
+            }
+            else if (mat.shader.name.IndexOf("Multiply", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return MaterialSample.BlendingMode.BLEND_MULTIPLY;
+            }
+            else if (mat.shader.name.IndexOf("Mask", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return MaterialSample.BlendingMode.BLEND_MASKED;
+            }
+
+            return MaterialSample.BlendingMode.BLEND_OPAQUE;
+        }
+
+        private static MaterialSample.MaterialType GetMaterialType(Material mat)
+        {
+            if (mat.shader.name.IndexOf("Unlit", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return MaterialSample.MaterialType.UNLIT;
+            }
+            return MaterialSample.MaterialType.PHYSICALLY_BASED;
         }
 
         public static void ExportMaterial(Scene scene, Material mat, string usdMaterialPath)
@@ -76,6 +156,8 @@ namespace Unity.Formats.USD
 
             var material = new MaterialSample();
             material.surface.SetConnectedPath(shaderPath, "outputs:surface");
+            material.SetBlendingMode(GetRenderingMode(mat));
+            material.SetMaterialType(GetMaterialType(mat));
             var origTime = scene.Time;
 
             try

@@ -131,11 +131,11 @@ namespace Unity.Formats.USD
 
             IsSpecularWorkflow = previewSurf.useSpecularWorkflow.defaultValue == 1;
 
-            ImportColorOrMap(scene, previewSurf.diffuseColor, false, options, ref DiffuseMap, ref Diffuse,
+            ImportValueOrMap(scene, previewSurf.diffuseColor, false, options, ref DiffuseMap, ref Diffuse,
                 out uvPrimvar);
             MergePrimvars(uvPrimvar, primvars);
 
-            ImportColorOrMap(scene, previewSurf.emissiveColor, false, options, ref EmissionMap, ref Emission,
+            ImportValueOrMap(scene, previewSurf.emissiveColor, false, options, ref EmissionMap, ref Emission,
                 out uvPrimvar);
             MergePrimvars(uvPrimvar, primvars);
 

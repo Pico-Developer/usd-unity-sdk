@@ -16,9 +16,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.UI;
 using USD.NET;
 using USD.NET.Unity;
 using Stopwatch = System.Diagnostics.Stopwatch;
+using TMPro;
 
 namespace Unity.Formats.USD
 {
@@ -134,6 +137,7 @@ namespace Unity.Formats.USD
             context.basisTransform = basisTransform;
             context.exportRoot = root.transform.parent;
             context.exportTransformOverrides = exportOverrides;
+            context.activePolicy = ActiveExportPolicy.Ignore;
             SyncExportContext(root, context);
 
             // Since this is a one-shot convenience function, we will automatically split the export
@@ -541,6 +545,27 @@ namespace Unity.Formats.USD
             }
         }
 
+        static private void InitTransparentMaterialProperties(Material material)
+        {
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.EnableKeyword("_ALPHATEST_ON");
+            material.EnableKeyword("_AlphaClip");
+            if (material.HasFloat("_Surface"))
+            {
+                material.SetFloat("_Surface", (float)MaterialSample.BlendingMode.BLEND_TRANSPARENT);
+            }
+
+            if (material.HasFloat("_AlphaClip"))
+            {
+                material.SetFloat("_AlphaClip", 1.0f);
+            }
+
+            if (material.HasFloat("_Cutoff"))
+            {
+                material.SetFloat("_Cutoff", 0.01f);
+            }
+        }
+
         static void InitExportableObjects(GameObject go,
             ExportContext context)
         {
@@ -555,6 +580,15 @@ namespace Unity.Formats.USD
                 var mr = go.GetComponent<MeshRenderer>();
                 var mf = go.GetComponent<MeshFilter>();
                 var cam = go.GetComponent<Camera>();
+
+                //  If we have found a UI Element
+                //
+                var textMeshProComponent = go.GetComponent<TMP_Text>();
+                var canvasRenderer = go.GetComponent<CanvasRenderer>();
+                var spriteRenderer = go.GetComponent<SpriteRenderer>();
+
+                Shader uiShader = Shader.Find(UIExportTools.UIReplacementShader);
+
                 Transform expRoot = context.exportRoot;
 
                 var tmpPath = new pxr.SdfPath(UnityTypeConverter.GetPath(go.transform, expRoot));
@@ -609,7 +643,10 @@ namespace Unity.Formats.USD
                         }
                     }
                 }
-                else if (mf != null && mr != null)
+                else if (mf != null &&
+                         mr != null &&
+                         mr.shadowCastingMode != ShadowCastingMode.ShadowsOnly &&
+                         textMeshProComponent == null)
                 {
                     foreach (var mat in mr.sharedMaterials)
                     {
@@ -636,6 +673,131 @@ namespace Unity.Formats.USD
                     CreateExportPlan(go, CreateSample<CameraSample>(context), CameraExporter.ExportCamera, context);
                     CreateExportPlan(go, CreateSample<CameraSample>(context), NativeExporter.ExportObject, context,
                         insertFirst: false);
+                }
+
+                //  TextMeshPro Export
+                //
+                else if(textMeshProComponent)
+                {
+                    //  As with GLTF, we need to flip the font tex Alpha channel to the Red channel
+                    //
+                    Texture2D fontAtlasTexture = UIExportTools.ConvertTextureRedToAlpha(
+                        textMeshProComponent.font.atlasTexture);
+
+                    Material textMaterial = new Material(uiShader)
+                    {
+                        mainTexture = fontAtlasTexture,
+                        color = textMeshProComponent.color
+                    };
+
+                    InitTransparentMaterialProperties(textMaterial);
+
+                    if (textMaterial !=null && !context.matMap.ContainsKey(textMaterial))
+                    {
+                        string usdPath = materialBasePath +
+                                         pxr.UsdCs.TfMakeValidIdentifier(
+                                             textMaterial.name + "_" + textMaterial.GetInstanceID().ToString());
+                        context.matMap.Add(textMaterial, usdPath);
+                    }
+
+                    CreateExportPlan(
+                        go,
+                        CreateSample<MeshSample>(context),
+                        UIExportTools.ExportTextMeshPro,
+                        context,
+                        additionalData:textMaterial
+                    );
+                    CreateExportPlan(go, CreateSample<MeshSample>(context), NativeExporter.ExportObject, context,
+                        insertFirst: false);
+                }
+
+                //  Canvas UI Export
+                //
+                else if (canvasRenderer)
+                {
+                    Graphic graphic = canvasRenderer.GetComponent<Graphic>();
+                    if (graphic == null)
+                    {
+                        return;
+                    }
+
+                    graphic.Rebuild(CanvasUpdate.PreRender);
+
+                    //  We treat the UI element like a quad with a new unlit shader material
+                    //
+                    Material uiMaterial = new Material(uiShader);
+                    uiMaterial.mainTexture = new Texture2D(1, 1);
+                    Color uiMaterialColor = canvasRenderer.GetColor();
+                    uiMaterialColor.a *= canvasRenderer.GetInheritedAlpha();
+
+                    uiMaterialColor *= graphic.color;
+                    if (graphic.mainTexture != null)
+                    {
+                        uiMaterial.mainTexture = graphic.mainTexture;
+                    }
+
+                    InitTransparentMaterialProperties(uiMaterial);
+
+                    uiMaterial.color = uiMaterialColor;
+
+                    if (uiMaterial !=null && !context.matMap.ContainsKey(uiMaterial))
+                    {
+                        string usdPath = materialBasePath +
+                                         pxr.UsdCs.TfMakeValidIdentifier(
+                                             uiMaterial.name + "_" + uiMaterial.GetInstanceID().ToString());
+                        context.matMap.Add(uiMaterial, usdPath);
+                    }
+
+                    CreateExportPlan(
+                        go,
+                        CreateSample<MeshSample>(context),
+                        UIExportTools.ExportCanvasRenderer,
+                        context,
+                        additionalData:uiMaterial
+                        );
+                    CreateExportPlan(go, CreateSample<MeshSample>(context), NativeExporter.ExportObject, context,
+                        insertFirst: false);
+                }
+
+                //  For a Sprite present but no CanvasRenderer
+                //
+                else if (spriteRenderer)
+                {
+                    Material uiMaterial = new Material(uiShader);
+                    uiMaterial.mainTexture = new Texture2D(1, 1);
+
+                    Sprite uiSprite = spriteRenderer.sprite;
+                    if (uiSprite != null && uiSprite.texture != null)
+                    {
+                        uiMaterial.mainTexture = uiSprite.texture;
+                    }
+
+                    InitTransparentMaterialProperties(uiMaterial);
+                    uiMaterial.color = spriteRenderer.color;
+
+                    if (uiMaterial !=null && !context.matMap.ContainsKey(uiMaterial))
+                    {
+                        string usdPath = materialBasePath +
+                                         pxr.UsdCs.TfMakeValidIdentifier(
+                                             uiMaterial.name + "_" + uiMaterial.GetInstanceID().ToString());
+                        context.matMap.Add(uiMaterial, usdPath);
+                    }
+
+                    CreateExportPlan(
+                        go,
+                        CreateSample<MeshSample>(context),
+                        UIExportTools.ExportSpriteRenderer,
+                        context,
+                        additionalData:uiMaterial
+                        );
+                    CreateExportPlan(go, CreateSample<MeshSample>(context), NativeExporter.ExportObject, context,
+                        insertFirst: false);
+                }
+
+                else
+                {
+                    // Mesh without renderable or unsupported, export as empty transform
+                    CreateExportPlan(go, CreateSample<XformSample>(context), XformExporter.ExportXform, context);
                 }
             }
         }
@@ -755,7 +917,8 @@ namespace Unity.Formats.USD
             ExportFunction exportFunc,
             ExportContext context,
             string pathSuffix = null,
-            bool insertFirst = true)
+            bool insertFirst = true,
+            object additionalData = null)
         {
             // This is an exportable object.
             Transform expRoot = context.exportRoot;
@@ -770,7 +933,7 @@ namespace Unity.Formats.USD
                 context.plans.Add(go, new ExportPlan());
             }
 
-            var exp = new Exporter { exportFunc = exportFunc, sample = sample, path = path };
+            var exp = new Exporter { exportFunc = exportFunc, sample = sample, path = path , data = additionalData};
             if (insertFirst)
             {
                 context.plans[go].exporters.Insert(0, exp);

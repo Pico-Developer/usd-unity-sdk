@@ -134,24 +134,72 @@ namespace Unity.Formats.USD
             ExportStandardCommon(scene, usdShaderPath, material, surface, destTexturePath);
             surface.useSpecularWorkflow.defaultValue = 0;
 
+            // commented out the original implementation as it seems to have the following issues
+            // 1.unity doesn't support metallic value and metallic map at the same time, when exporting metallic map, scale should always be 1.0. Exporting metallic value as scale here will result mismatched metallic value on exported material
+            // 2.when using smoothness map, the scale property is _GlossMapScale rather than _Glossiness
+            // 3.exported files are not rendered correctly in RealityKit
+            //
+            //if (material.HasProperty("_MetallicGlossMap") && material.GetTexture("_MetallicGlossMap") != null)
+            //{
+            //    var scale = Vector4.one;
+            //    if (material.HasProperty("_Metallic"))
+            //    {
+            //        scale.x = material.GetFloat("_Metallic");
+            //    }
+
+            //    var newTex = SetupTexture(scene, usdShaderPath, material, surface, scale, destTexturePath,
+            //        "_MetallicGlossMap", "b", ConversionType.SwapRASmoothnessToBGRoughness);
+            //    surface.metallic.SetConnectedPath(newTex);
+            //    scale = Vector4.one;
+            //    scale.x = 1 - material.GetFloat("_Glossiness");
+            //    var roughnessTex = SetupTexture(scene, usdShaderPath, material, surface, scale, destTexturePath,
+            //        "_MetallicGlossMap", "g", ConversionType.SwapRASmoothnessToBGRoughness);
+            //    surface.roughness.SetConnectedPath(roughnessTex);
+            //}
+            //else if (material.HasProperty("_Metallic"))
+            //{
+            //    surface.metallic.defaultValue = material.GetFloat("_Metallic");
+            //}
+            //else
+            //{
+            //    surface.metallic.defaultValue = .5f;
+            //}
+
+            //if (material.HasProperty("_Glossiness"))
+            //{
+            //    surface.roughness.defaultValue = 1 - material.GetFloat("_Glossiness");
+            //}
+            //else
+            //{
+            //    surface.roughness.defaultValue = 0.5f;
+            //}
+
             if (material.HasProperty("_MetallicGlossMap") && material.GetTexture("_MetallicGlossMap") != null)
             {
-                var scale = Vector4.one;
-                if (material.HasProperty("_Metallic"))
-                {
-                    scale.x = material.GetFloat("_Metallic");
-                }
-
-                var newTex = SetupTexture(scene, usdShaderPath, material, surface, scale, destTexturePath,
-                    "_MetallicGlossMap", "b", ConversionType.SwapRASmoothnessToBGRoughness);
+                // when there is metallic map we shouldn't apply metallic value as scale since Unity doesn't support metallic value over metallic map
+                var newTex = SetupTexture(scene, usdShaderPath, material, surface, Vector4.one, destTexturePath,
+                    "_MetallicGlossMap", "r");
                 surface.metallic.SetConnectedPath(newTex);
-                scale = Vector4.one;
-                scale.x = 1 - material.GetFloat("_Glossiness");
+            }
+
+            var smoothnessChannel = material.GetFloat("_SmoothnessTextureChannel");
+            string smoothnessMapPropertyName = "_MetallicGlossMap";
+            if (smoothnessChannel == 1.0f) {
+                smoothnessMapPropertyName = "_MainTex";
+            }
+
+            if (material.HasProperty(smoothnessMapPropertyName) && material.GetTexture(smoothnessMapPropertyName) != null) {
+                //TODO(xutongh.zhou): extract the alpha channel as smoothness map as RealityKit have troubles rendering packed texture
+                var scale = Vector4.one;
+                // when there is smoothness map _GlossMapScale should be used over _Glossiness
+                scale.w = material.GetFloat("_GlossMapScale");
                 var roughnessTex = SetupTexture(scene, usdShaderPath, material, surface, scale, destTexturePath,
-                    "_MetallicGlossMap", "g", ConversionType.SwapRASmoothnessToBGRoughness);
+                    smoothnessMapPropertyName, "a", ConversionType.SmoothnessToRoughness);
                 surface.roughness.SetConnectedPath(roughnessTex);
             }
-            else if (material.HasProperty("_Metallic"))
+
+
+            if (material.HasProperty("_Metallic"))
             {
                 surface.metallic.defaultValue = material.GetFloat("_Metallic");
             }
@@ -289,7 +337,7 @@ namespace Unity.Formats.USD
             }
         }
 
-        private static void ExportStandardCommon(Scene scene,
+        public static void ExportStandardCommon(Scene scene,
             string usdShaderPath,
             Material mat,
             UnityPreviewSurfaceSample surface,
@@ -344,12 +392,12 @@ namespace Unity.Formats.USD
             {
                 // Standard.
                 c = mat.GetColor("_Color").linear;
-                surface.diffuseColor.defaultValue = new Vector3(c.r, c.g, c.b);
+                surface.diffuseColor.defaultValue = c;
             }
             else
             {
                 c = Color.white;
-                surface.diffuseColor.defaultValue = new Vector3(c.r, c.g, c.b);
+                surface.diffuseColor.defaultValue = c;
             }
 
             // Standard Shader has 4 modes (magic shader values internally defined in StandardShaderGUI.cs):
@@ -364,6 +412,10 @@ namespace Unity.Formats.USD
                 shaderMode = (StandardShaderBlendMode)mat.GetFloat("_Mode");
             }
 
+            //  TODO: This is broken - _Surface appears in zero BiRP shaders
+            //      and this is causing a lot of shaders with transparency not to export properly
+            //      come up with a better solution later
+            //
             if (mat.HasProperty("_Surface"))
             {
                 if (mat.HasProperty("_AlphaClip") && mat.GetFloat("_AlphaClip") == 1.0f)
@@ -376,6 +428,16 @@ namespace Unity.Formats.USD
                         ? StandardShaderBlendMode.Opaque
                         : StandardShaderBlendMode.Transparent;
                 }
+            }
+
+            //  This is a very bad kludge, change later or so help me god
+            if (mat.shader.name.Equals("Unlit/Transparent"))
+            {
+                shaderMode = StandardShaderBlendMode.Transparent;
+            }
+            if (mat.shader.name.Equals("Unlit/Transparent Cutout"))
+            {
+                shaderMode = StandardShaderBlendMode.Cutout;
             }
 
             if (shaderMode != StandardShaderBlendMode.Opaque)
@@ -414,6 +476,7 @@ namespace Unity.Formats.USD
 
             if (mat.HasProperty("_BumpMap") && mat.GetTexture("_BumpMap") != null)
             {
+                // do not support bumpscale for now
                 var newTex = SetupTexture(scene, usdShaderPath, mat, surface, Vector4.one, destTexturePath, "_BumpMap",
                     "rgb", ConversionType.UnpackNormal);
                 surface.normal.SetConnectedPath(newTex);
@@ -421,18 +484,21 @@ namespace Unity.Formats.USD
 
             if (mat.HasProperty("_ParallaxMap") && mat.GetTexture("_ParallaxMap") != null)
             {
-                var newTex = SetupTexture(scene, usdShaderPath, mat, surface, Vector4.one, destTexturePath,
+                var scale = Vector4.one * mat.GetFloat("_Parallax");
+                var newTex = SetupTexture(scene, usdShaderPath, mat, surface, scale, destTexturePath,
                     "_ParallaxMap", "rgb");
                 surface.displacement.SetConnectedPath(newTex);
             }
 
             if (mat.HasProperty("_OcclusionMap") && mat.GetTexture("_OcclusionMap") != null)
             {
+                var aoTex = mat.GetTexture("_OcclusionMap");
                 // Occlusion maps in built-in standard shaders have the same data in every channel.
                 // In URP, the occlusion is packed into the G channel of a mask map.
                 // https://docs.unity3d.com/Packages/com.unity.render-pipelines.universal@16.0/manual/lit-shader.html#channel-packing
-                var newTex = SetupTexture(scene, usdShaderPath, mat, surface, Vector4.one, destTexturePath,
-                    "_OcclusionMap", "g");
+                var scale = Vector4.one * mat.GetFloat("_OcclusionStrength");
+                var newTex = SetupTexture(scene, usdShaderPath, mat, surface, scale, destTexturePath,
+                    "_OcclusionMap", "r");
                 surface.occlusion.SetConnectedPath(newTex);
             }
 
@@ -459,7 +525,7 @@ namespace Unity.Formats.USD
                 if (mat.HasProperty("_EmissionColor"))
                 {
                     c = mat.GetColor("_EmissionColor").linear;
-                    surface.emissiveColor.defaultValue = new Vector3(c.r, c.g, c.b);
+                    surface.emissiveColor.defaultValue = c;
                 }
             }
         }

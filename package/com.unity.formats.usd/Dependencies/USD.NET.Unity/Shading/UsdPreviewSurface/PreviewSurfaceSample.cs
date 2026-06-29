@@ -34,13 +34,13 @@ namespace USD.NET.Unity
         /// When using metallic workflow this is interpreted as albedo.
         /// </summary>
         [InputParameter("_DiffuseColor")]
-        public Connectable<Vector3> diffuseColor = new Connectable<Vector3>(new Vector3(0.18f, 0.18f, 0.18f));
+        public Connectable<Color> diffuseColor = new Connectable<Color>(new Color(0.18f, 0.18f, 0.18f));
 
         /// <summary>
         /// Emissive component.
         /// </summary>
         [InputParameter("_EmissiveColor")]
-        public Connectable<Vector3> emissiveColor = new Connectable<Vector3>(Vector3.zero);
+        public Connectable<Color> emissiveColor = new Connectable<Color>(Color.black);
 
         /// <summary>
         /// This node can fundamentally operate in two modes : Specular workflow where you provide a

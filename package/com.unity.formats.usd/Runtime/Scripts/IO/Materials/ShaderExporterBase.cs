@@ -13,6 +13,7 @@
 // limitations under the License.
 
 using pxr;
+using UnityEditor;
 using UnityEngine;
 using USD.NET;
 using USD.NET.Unity;
@@ -27,7 +28,8 @@ namespace Unity.Formats.USD
             SwapRASmoothnessToBGRoughness,
             InvertAlpha,
             UnpackNormal,
-            MaskMapToORM
+            MaskMapToORM,
+            SmoothnessToRoughness,
         }
 
         static Material _metalGlossChannelSwapMaterial = null;
@@ -69,7 +71,7 @@ namespace Unity.Formats.USD
             string filePath = null;
             string fileName = null;
 
-            var srcTexture2d = material.GetTexture(textureName);
+            var srcTexture2d = (Texture2D)material.GetTexture(textureName);
 
             bool needsConversion = false;
             switch (conversionType)
@@ -82,17 +84,18 @@ namespace Unity.Formats.USD
                     {
                         // normal needs to be converted if the one on disk isn't really a normal map
                         // (e.g. created from greyscale)
-                        UnityEditor.TextureImporter importer =
-                            (UnityEditor.TextureImporter)UnityEditor.AssetImporter.GetAtPath(
-                                UnityEditor.AssetDatabase.GetAssetPath(srcTexture2d));
-                        if (importer.textureType != UnityEditor.TextureImporterType.NormalMap)
+                        string assetPath = AssetDatabase.GetAssetPath(srcTexture2d);
+                        AssetImporter assetImporter = AssetImporter.GetAtPath(assetPath);
+                        TextureImporter textureImporter = (TextureImporter)assetImporter;
+
+                        if (textureImporter.textureType != UnityEditor.TextureImporterType.NormalMap)
                         {
                             Debug.LogWarning("Texture " + textureName + " is set as NormalMap but isn't marked as such",
                                 srcTexture2d);
                         }
 
                         UnityEditor.TextureImporterSettings dst = new UnityEditor.TextureImporterSettings();
-                        importer.ReadTextureSettings(dst);
+                        textureImporter.ReadTextureSettings(dst);
                         // if this NormalMap is created from greyscale we will export the NormalMap from memory.
                         if (dst.convertToNormalMap)
                         {
@@ -184,9 +187,12 @@ namespace Unity.Formats.USD
                         break;
                 }
 
-                var rt = new RenderTexture(srcTexture2d.width, srcTexture2d.height, 0, RenderTextureFormat.ARGB32,
+                var renderTextureFormat = RenderTextureFormat.ARGB32;
+                var textureFormat = TextureFormat.ARGB32;
+
+                var rt = new RenderTexture(srcTexture2d.width, srcTexture2d.height, 0, renderTextureFormat,
                     preserveLinear ? RenderTextureReadWrite.Linear : RenderTextureReadWrite.Default);
-                var resultTex2d = new Texture2D(srcTexture2d.width, srcTexture2d.height, TextureFormat.ARGB32, true,
+                var resultTex2d = new Texture2D(srcTexture2d.width, srcTexture2d.height, textureFormat, true,
                     preserveLinear ? true : false);
                 var activeRT = RenderTexture.active;
                 try
@@ -253,6 +259,21 @@ namespace Unity.Formats.USD
                         case ConversionType.UnpackNormal:
                             Graphics.Blit(srcTexture2d, rt, _normalChannelMaterial);
                             break;
+                        case ConversionType.SmoothnessToRoughness:
+                            _metalGlossChannelSwapMaterial.SetVector("_Invert",
+                                new Vector4(0, 0, 0, 1)); // invert alpha result
+                            _metalGlossChannelSwapMaterial.SetVector("_RScale",
+                                new Vector4(1, 0, 0, 0)); // use all color channels as-is
+                            _metalGlossChannelSwapMaterial.SetVector("_GScale", new Vector4(0, 1, 0, 0));
+                            _metalGlossChannelSwapMaterial.SetVector("_BScale", new Vector4(0, 0, 1, 0));
+                            // we need to apply smoothness scale now since roughness will be 1 - map.a * scale
+                            _metalGlossChannelSwapMaterial.SetVector("_AScale", new Vector4(0, 0, 0, scale.w));
+
+                            Graphics.Blit(srcTexture2d, rt, _metalGlossChannelSwapMaterial);
+                            // since scale is already apply during texture conversion, reset the scale to 1
+                            scale.w = 1;
+                            break;
+
                     }
 
                     resultTex2d.ReadPixels(new Rect(0, 0, srcTexture2d.width, srcTexture2d.height), 0, 0);
@@ -302,6 +323,7 @@ namespace Unity.Formats.USD
                 uvReader.varname.defaultValue = new TfToken("st");
                 scene.Write(usdShaderPath + "/uvReader", uvReader);
                 var usdTexReader = new TextureReaderSample(filePath, usdShaderPath + "/uvReader.outputs:result");
+
                 usdTexReader.wrapS =
                     new Connectable<TextureReaderSample.WrapMode>(
                         TextureReaderSample.GetWrapMode(srcTexture2d.wrapModeU));

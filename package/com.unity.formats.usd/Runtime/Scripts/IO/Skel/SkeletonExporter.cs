@@ -121,7 +121,8 @@ namespace Unity.Formats.USD
             }
 
             pxr.UsdPrim usdPrim = exportContext.scene.GetPrimAtPath(objContext.path);
-            pxr.UsdSkelBindingAPI.Apply(usdPrim);
+            if (usdPrim != null)
+                pxr.UsdSkelBindingAPI.Apply(usdPrim);
 
             // Convert the transform
             var path = new pxr.SdfPath(objContext.path);

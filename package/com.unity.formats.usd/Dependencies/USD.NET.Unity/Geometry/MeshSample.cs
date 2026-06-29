@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using UnityEngine.Serialization;
+
 namespace USD.NET.Unity
 {
     // This class adds the additional data needed to make the mesh a proper USD mesh. This is split
@@ -33,6 +35,9 @@ namespace USD.NET.Unity
 
         [UsdVariability(Variability.Uniform)]
         public Orientation orientation;
+
+        [FormerlySerializedAs("subdivScheme")] [UsdVariability(Variability.Uniform)]
+        public SubdivScheme subdivisionScheme = SubdivScheme.None;
 
         // Should be an array of "3", one for each triangle, unles arbitrary polygons are used.
         public int[] faceVertexCounts; // TODO: remove- they're always 3 so just create at export to save time & memory

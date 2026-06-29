@@ -14,9 +14,11 @@
 
 using System.IO;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using USD.NET;
 using pxr;
 using Stopwatch = System.Diagnostics.Stopwatch;
+using Scene = USD.NET.Scene;
 
 namespace Unity.Formats.USD
 {
@@ -85,6 +87,131 @@ namespace Unity.Formats.USD
                 if (!success)
                 {
                     Debug.LogError($"Couldn't export {root.name} to the usdz file {usdzFilePath}");
+                    success = false;
+                    return;
+                }
+
+                File.Copy(usdzFileName, usdzFilePath, overwrite: true);
+            }
+            finally
+            {
+                // Clean up temp files.
+                Directory.SetCurrentDirectory(currentDir);
+                tmpDir.Delete(recursive: true);
+
+                analyticsTimer.Stop();
+                UsdEditorAnalytics.SendExportEvent(".usdz", analyticsTimer.Elapsed.TotalMilliseconds, success);
+            }
+        }
+
+        public static void ExportObjectsToUsdz(string usdzFilePath, GameObject[] roots)
+        {
+            if (roots.Length == 0)
+            {
+                Debug.LogError($"Trying to export to usdz file but nothing is selected for export");
+                return;
+            }
+            // Ensure USD is initialized before changing CWD.
+            // This does not protect us against external changes to CWD, so we are actively looking for
+            // a more robust solution with UPM devs.
+            InitUsd.Initialize();
+
+            // Keep the current directory to restore it at the end.
+            var currentDir = Directory.GetCurrentDirectory();
+
+            // Setup a temporary directory to export the wanted USD file and zip it.
+            string tmpDirPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+            DirectoryInfo tmpDir = Directory.CreateDirectory(tmpDirPath);
+
+            // Get the usd file name to export and the usdz file name of the archive.
+            string usdcFileName = Path.GetFileNameWithoutExtension(usdzFilePath) + ".usdc";
+            string usdzFileName = Path.GetFileName(usdzFilePath);
+
+            bool success = true;
+
+            Stopwatch analyticsTimer = new Stopwatch();
+            analyticsTimer.Start();
+
+            try
+            {
+                // Set the current working directory to the tmp directory to export with relative paths.
+                Directory.SetCurrentDirectory(tmpDirPath);
+
+                // Create the tmp .usd scene, into which the data will be exported.
+                Scene scene = ExportHelpers.InitForSave(Path.Combine(tmpDirPath, usdcFileName));
+                scene.MetersPerUnit = 0.01;
+                float scale = 1.0f / (float) scene.MetersPerUnit;
+                Vector3[] localScales = new Vector3[roots.Length];
+                Vector3[] localPositions = new Vector3[roots.Length];
+
+                for (var i = 0; i < roots.Length; i++)
+                {
+                    localScales[i] = roots[i].transform.localScale;
+                    localPositions[i] = roots[i].transform.localPosition;
+                }
+
+                GameObject superroot = null;
+                try
+                {
+                    if (roots.Length > 1)
+                    {
+                        superroot = new GameObject("SUPERROOT");
+                        SceneManager.MoveGameObjectToScene(superroot, roots[0].scene);
+                    }
+
+                    for (var i = 0; i < roots.Length; i++)
+                    {
+                        var root = roots[i];
+                        // USDZ is in centimeters.
+                        root.transform.localScale = localScales[i] * scale;
+
+                        // if the export root has not parent, we will need to scale its position as well
+                        if (root.transform.parent == null)
+                        {
+                            roots[i].transform.parent = superroot?.transform;
+                            roots[i].transform.localPosition = localPositions[i] * scale;
+                        }
+                    }
+
+                    // Export the temp scene.
+                    SceneExporter.Export(superroot ?? roots[0],
+                        scene,
+                        BasisTransformation.SlowAndSafe, // Required by ARKit
+                        exportUnvarying: true,
+                        zeroRootTransform: false,
+                        exportMaterials: true);
+                }
+                finally
+                {                    
+                    // Undo temp scale.
+                    for (var i = 0; i < roots.Length; i++)
+                    {
+                        if (roots[i].transform.parent == superroot)
+                        {
+                            roots[i].transform.parent = null;
+                        }
+
+                        roots[i].transform.localScale = localScales[i];
+                        roots[i].transform.localPosition = localPositions[i];
+                    }
+
+                    if (superroot != null)
+                    {
+                        Object.DestroyImmediate(superroot);
+                    }
+
+                    // Flush any in-flight edits and release the scene so the file can be deleted.
+                    scene.Save();
+                    scene.Close();
+                    scene = null;
+                }
+
+                SdfAssetPath assetPath = new SdfAssetPath(usdcFileName);
+                success = pxr.UsdCs.UsdUtilsCreateNewARKitUsdzPackage(assetPath, usdzFileName);
+
+                if (!success)
+                {
+                    Debug.LogError($"Couldn't export {roots[0].name} to the usdz file {usdzFilePath}");
                     success = false;
                     return;
                 }

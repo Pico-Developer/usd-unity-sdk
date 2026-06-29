@@ -4,7 +4,8 @@
         "Unity.Formats.USD.Runtime",
         "Unity.Recorder.Editor",
         "USD.NET",
-        "Unity.Formats.USD.Common"
+        "Unity.Formats.USD.Common",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [
         "Editor"

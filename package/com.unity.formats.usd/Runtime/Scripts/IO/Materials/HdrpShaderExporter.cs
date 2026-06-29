@@ -32,7 +32,7 @@ namespace Unity.Formats.USD
             // useful for debugging which keywords are set in which case to determine actual feature usage
             // (just because a material has an _AlphaCutoff does not mean the option is actually active)
             // Debug.Log("Material: " + material.name + ", Keywords: " + string.Join("\n", material.shaderKeywords), material);
-            surface.diffuseColor.defaultValue = new Vector3(1, 1, 1);
+            surface.diffuseColor.defaultValue = Color.white;
             if (material.HasProperty("_BaseColorMap") && material.GetTexture("_BaseColorMap") != null)
             {
                 var scale = Vector4.one;
@@ -48,12 +48,12 @@ namespace Unity.Formats.USD
             else if (material.HasProperty("_BaseColor"))
             {
                 c = material.GetColor("_BaseColor").linear;
-                surface.diffuseColor.defaultValue = new Vector3(c.r, c.g, c.b);
+                surface.diffuseColor.defaultValue = c;
             }
             else
             {
                 c = Color.white;
-                surface.diffuseColor.defaultValue = new Vector3(c.r, c.g, c.b);
+                surface.diffuseColor.defaultValue = c;
             }
 
             if (material.IsKeywordEnabled("_SURFACE_TYPE_TRANSPARENT"))
@@ -238,7 +238,7 @@ namespace Unity.Formats.USD
                 else if (material.HasProperty("_EmissiveColor"))
                 {
                     c = material.GetColor("_EmissiveColor").linear;
-                    surface.emissiveColor.defaultValue = new Vector3(c.r, c.g, c.b);
+                    surface.emissiveColor.defaultValue = c;
                 }
             }
         }

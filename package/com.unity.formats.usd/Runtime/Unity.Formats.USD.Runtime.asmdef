@@ -6,7 +6,8 @@
         "USD.NET",
         "USD.NET.Unity",
         "Unity.Formats.USD.Common",
-        "Unity.RenderPipelines.Universal.Editor"
+        "Unity.RenderPipelines.Universal.Editor",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [
         "Editor",

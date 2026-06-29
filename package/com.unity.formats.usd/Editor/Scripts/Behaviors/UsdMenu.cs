@@ -82,7 +82,7 @@ namespace Unity.Formats.USD
         [MenuItem("USD/Export Selected as USDZ", true)]
         static bool EnableMenuExportSelectedAsUsdz()
         {
-            return Selection.gameObjects.Length == 1;
+            return Selection.gameObjects.Length > 0;
         }
 
         [MenuItem("USD/Export Selected as USDZ", priority = 50)]
@@ -108,7 +108,7 @@ namespace Unity.Formats.USD
                 }
             }
 
-            UsdzExporter.ExportUsdz(filePath, Selection.activeGameObject);
+            UsdzExporter.ExportObjectsToUsdz(filePath, Selection.gameObjects);
         }
 
 #if false
