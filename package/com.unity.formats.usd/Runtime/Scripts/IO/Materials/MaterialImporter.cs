@@ -355,7 +355,9 @@ namespace Unity.Formats.USD
             RenderTexture.ReleaseTemporary(tmp);
 
 #if UNITY_EDITOR
-            var assetPath = UnityEditor.AssetDatabase.GetAssetPath(baseTex.GetInstanceID());
+            // Use the Object overload across Unity versions. Unity 6000.5+ no longer allows
+            // the legacy int instance ID overload.
+            var assetPath = UnityEditor.AssetDatabase.GetAssetPath(baseTex);
 
             var bytes = newTex.EncodeToPNG();
             var newAssetPath = Path.ChangeExtension(assetPath, fileNameSuffix + ".png");

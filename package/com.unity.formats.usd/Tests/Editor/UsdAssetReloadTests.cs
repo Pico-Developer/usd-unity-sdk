@@ -13,6 +13,15 @@ namespace Unity.Formats.USD.Tests
 {
     public class UsdAssetReloadTests : BaseFixtureEditor
     {
+        static long GetObjectId(UnityEngine.Object obj)
+        {
+#if UNITY_6000_5_OR_NEWER
+            return unchecked((long)EntityId.ToULong(obj.GetEntityId()));
+#else
+            return obj.GetInstanceID();
+#endif
+        }
+
         string testFilePath;
         string testFileModifiedPath;
 
@@ -114,10 +123,10 @@ namespace Unity.Formats.USD.Tests
             var scene = OpenUSDGUIDAssetScene(TestDataGuids.Instancer.PointInstancedUsda, out _);
             var instancerObject = ImportHelpers.ImportSceneAsGameObject(scene);
 
-            var originalChildrenData = new Dictionary<string, int>();
+            var originalChildrenData = new Dictionary<string, long>();
             foreach (Transform child in instancerObject.transform)
             {
-                originalChildrenData.Add(child.name, child.GetInstanceID());
+                originalChildrenData.Add(child.name, GetObjectId(child));
             }
 
             instancerObject.GetComponent<UsdAsset>().Reload(false);
@@ -130,7 +139,7 @@ namespace Unity.Formats.USD.Tests
                 if (child.name.StartsWith(instancerChildNamePrefix))
                 {
                     Assert.True(originalChildrenData.ContainsKey(child.name));
-                    Assert.That(originalChildrenData[child.name] != child.GetInstanceID());
+                    Assert.That(originalChildrenData[child.name] != GetObjectId(child));
                 }
             }
         }
