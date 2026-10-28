@@ -139,8 +139,6 @@ namespace Unity.Formats.USD
             Object[] selectedAsset = Selection.GetFiltered(typeof(Object), SelectionMode.Assets);
             foreach (Object obj in selectedAsset)
             {
-                // Use the Object overload, which is available both before and after Unity 6000.5.
-                // The int overload and Object.GetInstanceID() are compile errors in Unity 6000.5+.
                 var path = AssetDatabase.GetAssetPath(obj);
                 if (string.IsNullOrEmpty(path))
                 {

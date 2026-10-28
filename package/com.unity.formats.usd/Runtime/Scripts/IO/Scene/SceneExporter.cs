@@ -119,18 +119,23 @@ namespace Unity.Formats.USD
     /// </summary>
     public static class SceneExporter
     {
-        static string GetObjectIdString(UnityEngine.Object obj)
-        {
-#if UNITY_6000_5_OR_NEWER
-            return EntityId.ToULong(obj.GetEntityId()).ToString();
-#else
-            return obj.GetInstanceID().ToString();
-#endif
-        }
-
         // ------------------------------------------------------------------------------------------ //
         // Main Export Logic.
         // ------------------------------------------------------------------------------------------ //
+
+        static int GetUnityObjectId(UnityEngine.Object unityObject)
+        {
+            if (unityObject == null)
+            {
+                return 0;
+            }
+
+#if UNITY_6000_3_OR_NEWER
+            return unityObject.GetEntityId().GetHashCode();
+#else
+            return unityObject.GetInstanceID();
+#endif
+        }
 
         public static void Export(GameObject root,
             Scene scene,
@@ -620,7 +625,7 @@ namespace Unity.Formats.USD
                         {
                             string usdPath = materialBasePath +
                                 pxr.UsdCs.TfMakeValidIdentifier(
-                                mat.name + "_" + GetObjectIdString(mat));
+                                mat.name + "_" + GetUnityObjectId(mat).ToString());
                             context.matMap.Add(mat, usdPath);
                         }
                     }
@@ -668,7 +673,7 @@ namespace Unity.Formats.USD
                         {
                             string usdPath = materialBasePath +
                                 pxr.UsdCs.TfMakeValidIdentifier(
-                                mat.name + "_" + GetObjectIdString(mat));
+                                mat.name + "_" + GetUnityObjectId(mat).ToString());
                             context.matMap.Add(mat, usdPath);
                         }
                     }
@@ -705,7 +710,7 @@ namespace Unity.Formats.USD
                     {
                         string usdPath = materialBasePath +
                                          pxr.UsdCs.TfMakeValidIdentifier(
-                                             textMaterial.name + "_" + GetObjectIdString(textMaterial));
+                                             textMaterial.name + "_" + GetUnityObjectId(textMaterial).ToString());
                         context.matMap.Add(textMaterial, usdPath);
                     }
 
@@ -753,7 +758,7 @@ namespace Unity.Formats.USD
                     {
                         string usdPath = materialBasePath +
                                          pxr.UsdCs.TfMakeValidIdentifier(
-                                             uiMaterial.name + "_" + GetObjectIdString(uiMaterial));
+                                             uiMaterial.name + "_" + GetUnityObjectId(uiMaterial).ToString());
                         context.matMap.Add(uiMaterial, usdPath);
                     }
 
@@ -788,7 +793,7 @@ namespace Unity.Formats.USD
                     {
                         string usdPath = materialBasePath +
                                          pxr.UsdCs.TfMakeValidIdentifier(
-                                             uiMaterial.name + "_" + GetObjectIdString(uiMaterial));
+                                             uiMaterial.name + "_" + GetUnityObjectId(uiMaterial).ToString());
                         context.matMap.Add(uiMaterial, usdPath);
                     }
 

@@ -54,7 +54,7 @@ public class UsdScriptedImporter : ScriptedImporter
         var meshes = new HashSet<Mesh>();
         var materials = new HashSet<Material>();
 
-        ctx.AddObjectToAsset(go.GetInstanceID().ToString(), go);
+        ctx.AddObjectToAsset(go.name, go);
         ctx.SetMainObject(go);
 
         int objIndex = 0;
